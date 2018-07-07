@@ -6,6 +6,16 @@ const abi = [{"constant":false,"inputs":[{"name":"_id","type":"uint256"},{"name"
 const app = express();
 const port = 8080;
 
+// DB
+const MongoClient = require('mongodb').MongoClient;
+const assert = require('assert');
+
+// Connection URL
+const url = 'mongodb://localhost:27017';
+
+// Database Name
+const dbName = 'PrizeLedger';
+
 // Web3 Node information
 const user = "";
 const pw = "";
@@ -28,8 +38,20 @@ app.listen(port, (err) => {
     console.log(`server is listening on ${port}`);
 });
 
+// Display the prize data, if any
+app.get('/validatePrize', (req, response) => {
+    validate_prize_data(req.query.prizeId, req.query.ownerId, function(err, res) {
+        if (err) {
+            response.json( {"err": err} );
+        } else {
+            response.json( res );
+        }
+    });
+});
+
+
 // Get prize data
-function get_prize_data(prizeId, callback) {
+function validate_prize_data(prizeId, ownerId, callback) {
     let contract = new web3.eth.Contract(abi, contractAddress);
     contract.methods.prizes(prizeId).call(function(error, result) {
         if (error) {
@@ -37,28 +59,56 @@ function get_prize_data(prizeId, callback) {
             callback(error, null);
         } else {
             console.log('result', result);
-            callback(null, result);
+            // returnedObj = JSON.parse(result);
+            if (result['owner_id'] === ownerId) {
+                callback(null, "Success");
+            } else {
+                callback(null, "Invalid");
+            }
         }
-    })
-        .catch(function(error) {
-            console.log('call error ' + error);
-            callback(error, null);
-        });
+    }).catch(function(error) {
+        console.log('call error ' + error);
+        callback(error, null);
+    });
 }
 
-// Display the prize data, if any
-app.get('/prize', (req, response) => {
-    get_prize_data(req.query.prizeId, function(err, res) {
+app.get('/prizes', (req, response) => {
+    get_all_prizes(function (err, res) {
         if (err) {
-            response.json( {"err": err} );
+            response.json({"err": err});
         } else {
-            response.json( {"res": res} );
+            response.json(res);
         }
     });
 });
 
+function get_all_prizes(callback) {
+    MongoClient.connect(url, function(err, client) {
+        assert.equal(null, err);
+        console.log("Connected correctly to server");
+
+        const db = client.db(dbName);
+
+        findDocuments(db, function(data) {
+            callback(null, data);
+            client.close();
+        });
+    });
+}
+
+const findDocuments = function(db, callback) {
+    const collection = db.collection('prizes');
+    // Find some documents
+    collection.find({}).toArray(function(err, docs) {
+        assert.equal(err, null);
+        console.log("Found the following records");
+        console.log(docs);
+        callback(docs);
+    });
+};
+
 app.post('/makePrize', (req, response) => {
-    makePrize(req.body.prizeId, req.body.ownerId, req.body.name, req.body.description, function (err, res) {
+    makePrize(req.body.prizeId, req.body.ownerId, req.body.prizeName, req.body.ownerName, req.body.secondPlaceName, function (err, res) {
         if (err) {
             response.json({"err": err});
         } else {
@@ -67,24 +117,59 @@ app.post('/makePrize', (req, response) => {
     });
 });
 
-function makePrize(id, ownerId, name, description, callback) {
+const insertDocument = function(data, db, callback) {
+    const collection = db.collection('prizes');
+    // Insert some documents
+    collection.insertMany([
+        data
+    ], function(err, result) {
+        assert.equal(err, null);
+        assert.equal(1, result.result.n);
+        assert.equal(1, result.ops.length);
+        console.log("Inserted document into the collection");
+        callback(result);
+    });
+};
+
+function makePrize(prizeId, ownerId, prizeName, ownerName, secondPlaceName, callback) {
     const newAccount = web3.eth.accounts.create();
-    const callData = web3.eth.abi.encodeFunctionCall(abi[1], [id, ownerId, '' + name]); // 2nd function in the abi
+    const callData = web3.eth.abi.encodeFunctionCall(abi[0], [prizeId, ownerId, '' + prizeName]); // 2nd function in the abi
     let tx = {
-        from: newAccount.address,
+        nonce: '0x00',
+        gas: 500000,
         to: contractAddress,
-        value: '0x0', // required eth transfer value, of course we don't deal with eth balances in private consortia
-        data: callData,
-        gas: 500000
+        value: '0x00', // required eth transfer value, of course we don't deal with eth balances in private consortia
+        data: callData
     };
+
+    // Add it to Mongo Collection
+    data = {
+        prizeId: prizeId,
+        prizeName: prizeName,
+        ownerId: ownerId,
+        ownerName: ownerName,
+        secondPlaceName: secondPlaceName
+    };
+    MongoClient.connect(url, function(err, client) {
+        assert.equal(null, err);
+        console.log("Connected successfully to server");
+        const db = client.db(dbName);
+        insertDocument(data, db, function() {
+            client.close();
+        });
+    });
 
     let signedTx = new Tx(tx);
     signedTx.sign(Buffer.from(newAccount.privateKey.slice(2), 'hex'));
     let serializedTx = signedTx.serialize();
 
-    web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'))
-        .then(() => {
-            console.log(`\tUpdated prize ${id}`);
-            callback(null, "Success!");
-        });
+    web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), function (err, hash) {
+        if (!err) {
+            console.log(hash); // "0x7f9fade1c0d57a7af66ab4ead79fade1c0d57a7af66ab4ead7c2c2eb7b11a91385"
+            callback(null, hash);
+        } else {
+            console.log(err);
+            callback(err, null);
+        }
+    });
 }
