@@ -31,6 +31,12 @@ app.use((err, request, response, next) => {
 });
 app.use(express.json());       // to support JSON-encoded bodies
 app.use(express.urlencoded()); // to support URL-encoded bodies
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 app.listen(port, (err) => {
     if (err) {
         return console.log('something bad happened', err);
@@ -165,7 +171,7 @@ function makePrize(prizeId, ownerId, prizeName, ownerName, secondPlaceName, call
 
     web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), function (err, hash) {
         if (!err) {
-            console.log(hash); // "0x7f9fade1c0d57a7af66ab4ead79fade1c0d57a7af66ab4ead7c2c2eb7b11a91385"
+            console.log(hash);
             callback(null, hash);
         } else {
             console.log(err);

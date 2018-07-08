@@ -1,0 +1,140 @@
+<html>
+<head>
+<script src="https://unpkg.com/react@15/dist/react.min.js"> </script><script src="https://unpkg.com/react-dom@15/dist/react-dom.min.js">
+</script>
+<script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+	<div id="newprizeTitle"><br/><br/><br/><b>New Prize:</b><br/></div>
+    <div id="newprize"></div>
+
+    <script type="text/babel">
+    
+	  	class App extends React.Component {
+
+		  constructor(props)  {
+			super(props);
+			
+			this.state = {
+			  object: []
+			};
+		  }
+		  
+		  fetchFirst(url) {
+			var that = this;
+			if (url) {
+			   fetch('http://localhost:8080/prizes/')
+				.then(response => response.json())
+				.then(object => this.setState({object}));
+			}
+		  }
+		  componentWillMount() {
+			  this.fetchFirst("reactjs");
+		  }
+
+		  render() {
+
+			  console.log(this.state);
+		  
+			  var object = this.state.object;
+
+			  let listItems = object.map((object) => <tr><td>{object.prizeId}</td><td>{object.ownerName}</td><td>{object.prizeName}</td><td>{object.secondPlaceName}</td><td><a href={'http://localhost:8080/validatePrize?prizeId=' + object.prizeId + '&' + 'ownerId=' + object.ownerId}>Validate</a></td></tr>
+			  );
+				
+				return (<table><tr><th>Prize Id</th><th>Owner Name</th><th>Prize Name</th><th>Second Place Name</th><th>Validate</th></tr>{listItems}</table>
+			  );
+		  }
+		}
+
+		const element = <App />;
+		ReactDOM.render(element, document.getElementById('root'));
+
+		</script>
+
+		<script type="text/babel">
+		class NameForm extends React.Component {
+	  constructor(props) {
+		super(props);
+		this.state = {prizeId: '', prizeName: '', ownerId: '', ownerName: '', secondPlaceName: ''};
+
+		this.handleChange = this.handleChange.bind(this);
+		this.handleSubmit = this.handleSubmit.bind(this);
+	  }
+
+	  handleChange(event) {
+		const target = event.target;
+		const value = target.value;
+		const name = target.name;
+		this.setState({
+		  [name]: value
+		});
+	  }
+
+	  handleSubmit(event) {
+		event.preventDefault();
+		var data = {
+			prizeId: this.state.prizeId,
+			prizeName: this.state.prizeName,
+			ownerId: this.state.ownerId,
+			ownerName: this.state.ownerName,
+			secondPlaceName: this.state.secondPlaceName
+		}
+
+		fetch('http://localhost:8080/makePrize', {
+			method: "POST",
+			headers: {
+			    "Content-Type": "application/json; charset=utf-8"
+			},
+			redirect: "follow",
+			referrer: "no-referrer",
+			body: JSON.stringify(data),
+		})
+		.then(response => location.reload())
+		.catch(error => console.error(`Fetch Error =\n`, error));
+
+
+	  }
+
+	  render() {
+		return (
+		  <form onSubmit={this.handleSubmit}>
+		    <label>
+		      Prize Id:
+		      <input type="text" name="prizeId" value={this.state.prizeId} onChange={this.handleChange} />
+		    </label>
+		    <br/>
+		    <label>
+		      Prize Name:
+		      <input type="text" name="prizeName" value={this.state.prizeName} onChange={this.handleChange} />
+		    </label>
+		    <br/>
+		    <label>
+		      Owner Id:
+		      <input type="text" name="ownerId" value={this.state.ownerId} onChange={this.handleChange} />
+		    </label>
+		    <br/>
+		    <label>
+		      Owner Name:
+		      <input type="text" name="ownerName" value={this.state.ownerName} onChange={this.handleChange} />
+		    </label>
+		    <br/>
+		    <label>
+		      Second place name:
+		      <input type="text" name="secondPlaceName" value={this.state.secondPlaceName} onChange={this.handleChange} />
+		    </label>
+		    <br/>
+		    <input type="submit" value="Submit" />
+		  </form>
+		);
+	  }
+	}
+
+	ReactDOM.render(
+	  <NameForm />,
+	  document.getElementById('newprize')
+	);
+
+    </script>
+</body>
+</html>
